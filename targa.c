@@ -1,7 +1,8 @@
 /*
  * MIT License
  *
- * TARGA Copyright (c) 2016 Sebastien Serre <ssbx@sysmo.io>.
+ * Copyright (c) 2005 David HENRY
+ * Modified      2016 Sebastien Serre <ssbx@sysmo.io>.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,20 +26,17 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-typedef enum {
-    TRUE_COLOR     = 0,
-    COLOR_MAPPED   = 1
-} TGA_COLORMAP_TYPE;
+#define CMT_TRUE_COLOR   0
+#define CMT_COLOR_MAPPED 1
 
-typedef enum {
-    NO_IMAGE_DATA                = 0,
-    UNCOMPRESSED_COLOR_MAPPED    = 1,
-    UNCOMPRESSED_TRUE_COLOR      = 2,
-    UNCOMPRESSED_BLACK_AND_WHITE = 3,
-    RLE_COLOR_MAPPED             = 9,
-    RLE_TRUE_COLOR               = 10,
-    RLE_BLACK_AND_WHITE          = 11 
-} TGA_IMAGE_TYPE;
+#define IMG_TYPE_NO_IMAGE_DATA                0
+#define IMG_TYPE_UNCOMPRESSED_COLOR_MAPPED    1
+#define IMG_TYPE_UNCOMPRESSED_TRUE_COLOR      2
+#define IMG_TYPE_UNCOMPRESSED_BLACK_AND_WHITE 3
+#define IMG_TYPE_RLE_COLOR_MAPPED             9
+#define IMG_TYPE_RLE_TRUE_COLOR               10
+#define IMG_TYPE_RLE_BLACK_AND_WHITE          11 
+
 
 typedef struct {
     uint16_t firstEntryIndex;
@@ -46,154 +44,199 @@ typedef struct {
     uint8_t  mapEntrySize;
 } TGA_COLOR_MAP_SPEC;
 
+
 typedef struct {
     uint16_t xOriginOfImage;
     uint16_t yOriginOfImage;
     uint16_t imageWidth;
     uint16_t imageHeight;
-    uint8_t pixelDepth;
-    char   imageDescriptor;
-} TGA_H_IMAGE_SPEC;
+    uint8_t  pixelDepth;
+    uint8_t  imageDescriptor;
+} TGA_IMAGE_SPEC;
+
 
 typedef struct {
-    uint16_t idLength;
-    uint16_t colorMapType;      // enum TGA_COLORMAP_TYPE
-    uint16_t imageType;         // enum TGA_IMAGE_TYPE
+    uint8_t idLength;
+    uint8_t colorMapType;      // CMT_*
+    uint8_t imageType;         // IMG_TYPE_*
     TGA_COLOR_MAP_SPEC colorMapSpec;
-    TGA_H_IMAGE_SPEC imageSpec;
+    TGA_IMAGE_SPEC imageSpec;
 } TGA_FILE_HEADER;
 
-typedef struct {
-    char extensionAreaOffset[4];
-    char developerDirectoryOffset[4];
-    char signature[16];                 // "TRUEVISION-XFILE"
-    char dotCharacter;                  // "."
-    char zeroStrTerminator;             // 0x00
-} TGA_FILE_FOOTER;
 
-void targaLoad(const char* fileName, int* status)
+void targaLoad24bits(
+        FILE*               TGA_file, 
+        TGA_FILE_HEADER*    TGA_header, 
+        uint8_t*            texture)
 {
-    FILE* targaFile = fopen(fileName, "rb");
 
-    if (!targaFile) {
+    int pixelCount =
+          TGA_header->imageSpec.imageWidth 
+        * TGA_header->imageSpec.imageHeight;
+
+    unsigned char r, g, b;
+    int i;
+    for (i = 0; i < pixelCount; i++)
+    {
+        b = fgetc(TGA_file);
+        g = fgetc(TGA_file);
+        r = fgetc(TGA_file);
+
+        texture[(i * 3) + 0] = r;
+        texture[(i * 3) + 1] = g;
+        texture[(i * 3) + 2] = b;
+        printf("%d %d %d\n", r, g, b);
+
+    }
+    
+}
+
+void* targaLoad(const char* fileName, int* status)
+{
+
+    FILE* TGA_file = fopen(fileName, "rb");
+
+    if (!TGA_file) {
 
         printf("openfile failed\n");
         return;
 
     }
 
-    if (fseek(targaFile, -26, SEEK_END) != 0) {
+    /*
+     * Read TGA header
+     */
+    TGA_FILE_HEADER TGA_header;
+    if (fread(&TGA_header.idLength, sizeof(uint8_t), 1, TGA_file) < 1) return;
+    fread(&TGA_header.colorMapType, sizeof(uint8_t), 1, TGA_file);
+    fread(&TGA_header.imageType, sizeof(uint8_t), 1, TGA_file);
+    fread(&TGA_header.colorMapSpec.firstEntryIndex, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.colorMapSpec.mapLenght, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.colorMapSpec.mapEntrySize, sizeof(uint8_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.xOriginOfImage, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.yOriginOfImage, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.imageWidth, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.imageHeight, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.pixelDepth, sizeof(uint8_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.imageDescriptor, sizeof(uint8_t), 1, TGA_file);
 
-        printf("can not read end of file");
-        return;
 
-    }
+    /*
+     * Skipp image id
+     */
+    fseek(TGA_file, TGA_header.idLength, SEEK_CUR);
 
-    // footer
-    TGA_FILE_FOOTER tgaFooter;
-    if (fread(&tgaFooter, sizeof(TGA_FILE_FOOTER), 1, targaFile) < 1)
+
+    /*
+     * Read color map
+     */
+    char *TGA_colorMap = NULL;
+    if (TGA_header.colorMapType == CMT_COLOR_MAPPED)
     {
 
-        printf("can not read footer\n");
-        return;
+        TGA_colorMap = malloc(
+                  sizeof(char)
+                * TGA_header.colorMapSpec.mapLenght
+                * (TGA_header.colorMapSpec.mapEntrySize >> 3));
 
+        fread(TGA_colorMap, sizeof(char), 
+                  TGA_header.colorMapSpec.mapLenght 
+                * (TGA_header.colorMapSpec.mapEntrySize >> 3), TGA_file);
     }
 
-    // define targa version 
-    int isNewTgaFormat = 0;
-    if (strncmp(tgaFooter.signature, "TRUEVISION-XFILE", 16) == 0)
-        isNewTgaFormat = 1;
+    /*
+     * Read image data
+     */
+    uint8_t *texture = malloc(sizeof(char) *
+              TGA_header.imageSpec.imageWidth
+            * TGA_header.imageSpec.imageHeight
+            * 4);
+ 
 
-    // fields 1 - 5
-    rewind(targaFile);
-    TGA_FILE_HEADER tgaHeader;
-    if (fread(&tgaHeader, sizeof(TGA_FILE_HEADER), 1, targaFile) < 1)
+    switch (TGA_header.imageType)
     {
-
-        printf("can not read header\n");
-        return;
-
+        case IMG_TYPE_NO_IMAGE_DATA:
+            printf("no data\n"); // TODO
+            return;
+        case IMG_TYPE_UNCOMPRESSED_COLOR_MAPPED:
+            printf("unsuported format color mapped\n"); // TODO
+            return;
+        case IMG_TYPE_UNCOMPRESSED_TRUE_COLOR:
+            switch (TGA_header.imageSpec.pixelDepth)
+            {
+                case 16:
+                    printf("unsuported 16 true color\n"); // TODO
+                    return;
+                case 24: 
+                         targaLoad24bits(TGA_file, &TGA_header, texture);
+                         break;
+                case 32:
+                    printf("unsuported 32 true color\n"); // TODO
+                    return;
+            }
+            break;
+        case IMG_TYPE_UNCOMPRESSED_BLACK_AND_WHITE:
+            printf("unsuported format black and white\n"); // TODO
+            return;
+        case IMG_TYPE_RLE_COLOR_MAPPED:
+            printf("unsuported format RLE color mapped\n"); // TODO
+            return;
+        case IMG_TYPE_RLE_TRUE_COLOR:
+            printf("unsuported format RLE true color\n"); // TODO
+            return;
+        case IMG_TYPE_RLE_BLACK_AND_WHITE:
+            printf("unsuported format RLE black and white\n"); // TODO
+            return;
     }
 
-    // field 6 - Image ID
-    char* imageId = NULL;
-    if (tgaHeader.idLength != 0) 
-    {
 
-        imageId = malloc(sizeof(char) * tgaHeader.idLength);
-        fread(imageId, sizeof(char), tgaHeader.idLength, targaFile);
 
-    }
+    /*
+     * Image data
+     *
+     *  Bits 3-0 - number of attribute bits associated with each pixel. 
+     */
+    //uint8_t TGA_imgAttribNum = TGA_header.imageSpec.imageDescriptor & 0x0F;
 
-    // field 7 - Color Map Data
-    char* mapData = NULL;
-    int useColorMap = 0;
-    if (tgaHeader.colorMapType != 0)
-    {
+    /*  Bit 4    - reserved.  Must be set to 0. */
 
-        useColorMap = 1;
-        int mapDataSize =
-              (int) tgaHeader.colorMapSpec.mapLenght
-            * (int) tgaHeader.colorMapSpec.mapEntrySize // in bits
-            / 8;
-        mapData = malloc(sizeof(char) * mapDataSize);
-        fread(mapData, sizeof(char), mapDataSize, targaFile);
-        printf("contains data %d\n", mapDataSize);
+    /*  Bit 5    - screen origin bit.
+     *      0 = Origin in lower left-hand corner.
+     *      1 = Origin in upper left-hand corner.
+     */
+    //uint8_t TGA_imgScrOriginBit = TGA_header.imageSpec.imageDescriptor & 0x20 >> 5;
 
-        // TODO
-        // will contain tgaHeader.colorMapSpec.mapLength elements
-        // of size tgaHeader.colorMapSpec.mapEntrySize
-        // starting at index tgaHeader.colorMapSpec.firstEntryIndex
-    }
+    /*  Bits 7-6 - Data storage interleaving flag.
+     *      00 = non-interleaved.
+     *      01 = two-way (even/odd) interleaving.
+     *      10 = four way interleaving.
+     *      11 = reserved.
+     */
+    //uint8_t TGA_imgInterleaving = TGA_header.imageSpec.imageDescriptor & 0xC0 >> 6;
 
-    // field 8 - Image Data
-    char* imageData = NULL;
-    int numberOfPixels = 
-          tgaHeader.imageSpec.imageWidth 
-        * tgaHeader.imageSpec.imageHeight;
 
-    if (!useColorMap)
-    {
-        // TODO use colormap indexes
-    }
+    /*
+    int TGA_pixsize;
+    if (TGA_imgAttribNum % 8 != 0)
+        TGA_pixsize = TGA_imgAttribNum / 8 + 3 + 1;
     else
-    {
-        int pixelSize = tgaHeader.imageSpec.pixelDepth;
-        printf("should read %d pixels of %d size\n", numberOfPixels, pixelSize);
-        printf("descriptor is %d\n", (uint8_t) tgaHeader.imageSpec.imageDescriptor);
+        TGA_pixsize = TGA_imgAttribNum / 8 + 3;
 
-        // TODO process imageDescriptor:
-        /*
-         *  Bits 3-0 - number of attribute bits associated with each pixel. 
-         *  Bit 4    - reserved.  Must be set to 0. 
-         *  Bit 5    - screen origin bit.
-         *      0 = Origin in lower left-hand corner.
-         *      1 = Origin in upper left-hand corner.
-         *  Bits 7-6 - Data storage interleaving flag.
-         *      00 = non-interleaved.
-         *      01 = two-way (even/odd) interleaving.
-         *      10 = four way interleaving.
-         *      11 = reserved.
-         */
-    }
-    
+    printf("will have %d bits attributes per pixels\n", TGA_imgAttribNum);
+    printf("will have %d screen origin bit\n", TGA_imgScrOriginBit);
+    printf("will have %d interleaving\n", TGA_imgInterleaving);
+    printf("will have %d pix size\n", TGA_pixsize);
+    printf("will have %d pix depth\n", TGA_header.imageSpec.pixelDepth);
+    printf("sizeof map spec %zu \n",sizeof(TGA_COLOR_MAP_SPEC));
+    printf("sizeof image spec %zu \n",sizeof(TGA_H_IMAGE_SPEC));
+    printf("sizeof file header spec %zu \n",sizeof(TGA_FILE_HEADER));
 
+    */
 
+    if (TGA_file != NULL)
+        fclose(TGA_file);
 
-
-    printf("ok read %s\n", tgaFooter.signature);
-    printf("ok read %d\n", isNewTgaFormat);
-
-    if (imageId != NULL)
-        free(imageId);
-
-    if (mapData != NULL)
-        free(mapData);
-
-    if (imageData != NULL)
-        free(imageData);
-
-    fclose(targaFile);
+    return texture;
 
 }
 
