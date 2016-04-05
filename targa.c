@@ -1,7 +1,8 @@
 /*
  * MIT License
  *
- * TARGA Copyright (c) 2016 Sebastien Serre <ssbx@sysmo.io>.
+ * Copyright (c) 2005 David HENRY
+ * Modified      2016 Sebastien Serre <ssbx@sysmo.io>.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -51,7 +52,7 @@ typedef struct {
     uint16_t imageHeight;
     uint8_t  pixelDepth;
     uint8_t  imageDescriptor;
-} TGA_H_IMAGE_SPEC;
+} TGA_IMAGE_SPEC;
 
 
 typedef struct {
@@ -59,15 +60,38 @@ typedef struct {
     uint8_t colorMapType;      // CMT_*
     uint8_t imageType;         // IMG_TYPE_*
     TGA_COLOR_MAP_SPEC colorMapSpec;
-    TGA_H_IMAGE_SPEC imageSpec;
+    TGA_IMAGE_SPEC imageSpec;
 } TGA_FILE_HEADER;
 
 
-typedef struct {
-    uint8_t r,g,b;
-} PIXEL;
+void targaLoad24bits(
+        FILE*               TGA_file, 
+        TGA_FILE_HEADER*    TGA_header, 
+        uint8_t*            texture)
+{
 
-void targaLoad(const char* fileName, int* status)
+    int pixelCount =
+          TGA_header->imageSpec.imageWidth 
+        * TGA_header->imageSpec.imageHeight;
+
+    unsigned char r, g, b;
+    int i;
+    for (i = 0; i < pixelCount; i++)
+    {
+        b = fgetc(TGA_file);
+        g = fgetc(TGA_file);
+        r = fgetc(TGA_file);
+
+        texture[(i * 3) + 0] = r;
+        texture[(i * 3) + 1] = g;
+        texture[(i * 3) + 2] = b;
+        printf("%d %d %d\n", r, g, b);
+
+    }
+    
+}
+
+void* targaLoad(const char* fileName, int* status)
 {
 
     FILE* TGA_file = fopen(fileName, "rb");
@@ -123,7 +147,7 @@ void targaLoad(const char* fileName, int* status)
     /*
      * Read image data
      */
-    char *texture = malloc(sizeof(char) *
+    uint8_t *texture = malloc(sizeof(char) *
               TGA_header.imageSpec.imageWidth
             * TGA_header.imageSpec.imageHeight
             * 4);
@@ -132,40 +156,38 @@ void targaLoad(const char* fileName, int* status)
     switch (TGA_header.imageType)
     {
         case IMG_TYPE_NO_IMAGE_DATA:
-            printf("no data\n");
+            printf("no data\n"); // TODO
             return;
         case IMG_TYPE_UNCOMPRESSED_COLOR_MAPPED:
-            printf("unsuported format color mapped\n");
+            printf("unsuported format color mapped\n"); // TODO
             return;
         case IMG_TYPE_UNCOMPRESSED_TRUE_COLOR:
             switch (TGA_header.imageSpec.pixelDepth)
             {
-                case 16: break;
+                case 16:
+                    printf("unsuported 16 true color\n"); // TODO
+                    return;
                 case 24: 
-                         targaLoad24bits()
-                case 32: break;
+                         targaLoad24bits(TGA_file, &TGA_header, texture);
+                         break;
+                case 32:
+                    printf("unsuported 32 true color\n"); // TODO
+                    return;
             }
             break;
         case IMG_TYPE_UNCOMPRESSED_BLACK_AND_WHITE:
-            printf("unsuported format black and white\n");
+            printf("unsuported format black and white\n"); // TODO
             return;
         case IMG_TYPE_RLE_COLOR_MAPPED:
-            printf("unsuported format RLE color mapped\n");
+            printf("unsuported format RLE color mapped\n"); // TODO
             return;
         case IMG_TYPE_RLE_TRUE_COLOR:
-            printf("unsuported format RLE true color\n");
+            printf("unsuported format RLE true color\n"); // TODO
             return;
         case IMG_TYPE_RLE_BLACK_AND_WHITE:
-            printf("unsuported format RLE black and white\n");
+            printf("unsuported format RLE black and white\n"); // TODO
             return;
     }
-
-
-
-
-    /*
-     * No color map data
-     */
 
 
 
@@ -174,7 +196,7 @@ void targaLoad(const char* fileName, int* status)
      *
      *  Bits 3-0 - number of attribute bits associated with each pixel. 
      */
-    uint8_t TGA_imgAttribNum = TGA_header.imageSpec.imageDescriptor & 0x0F;
+    //uint8_t TGA_imgAttribNum = TGA_header.imageSpec.imageDescriptor & 0x0F;
 
     /*  Bit 4    - reserved.  Must be set to 0. */
 
@@ -182,7 +204,7 @@ void targaLoad(const char* fileName, int* status)
      *      0 = Origin in lower left-hand corner.
      *      1 = Origin in upper left-hand corner.
      */
-    uint8_t TGA_imgScrOriginBit = TGA_header.imageSpec.imageDescriptor & 0x20 >> 5;
+    //uint8_t TGA_imgScrOriginBit = TGA_header.imageSpec.imageDescriptor & 0x20 >> 5;
 
     /*  Bits 7-6 - Data storage interleaving flag.
      *      00 = non-interleaved.
@@ -190,9 +212,10 @@ void targaLoad(const char* fileName, int* status)
      *      10 = four way interleaving.
      *      11 = reserved.
      */
-    uint8_t TGA_imgInterleaving = TGA_header.imageSpec.imageDescriptor & 0xC0 >> 6;
+    //uint8_t TGA_imgInterleaving = TGA_header.imageSpec.imageDescriptor & 0xC0 >> 6;
 
 
+    /*
     int TGA_pixsize;
     if (TGA_imgAttribNum % 8 != 0)
         TGA_pixsize = TGA_imgAttribNum / 8 + 3 + 1;
@@ -208,37 +231,12 @@ void targaLoad(const char* fileName, int* status)
     printf("sizeof image spec %zu \n",sizeof(TGA_H_IMAGE_SPEC));
     printf("sizeof file header spec %zu \n",sizeof(TGA_FILE_HEADER));
 
-    unsigned char* TGA_imageData = NULL;
-    int   TGA_numberOfPixels = 
-          TGA_header.imageSpec.imageWidth 
-        * TGA_header.imageSpec.imageHeight;
+    */
 
-    TGA_imageData = malloc(sizeof(char) * TGA_numberOfPixels * TGA_pixsize);
-    int i = 0;
-    for (i; i < TGA_numberOfPixels; i++)
-    {
+    if (TGA_file != NULL)
+        fclose(TGA_file);
 
-        fread(&TGA_imageData[i * TGA_pixsize], sizeof(char), TGA_pixsize, TGA_file);
-        /*
-        printf("%d\tattrib: %d, red: %d, green: %d, blue: %d \n",
-                i,
-                TGA_imageData[i * TGA_pixsize],
-                TGA_imageData[i * TGA_pixsize + 1],
-                TGA_imageData[i * TGA_pixsize + 2],
-                TGA_imageData[i * TGA_pixsize + 3]);
-                */
-        
-    }
-
-
-
-
-
-
-    if (TGA_imageData != NULL)
-        free(TGA_imageData);
-
-    fclose(TGA_file);
+    return texture;
 
 }
 
