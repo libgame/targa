@@ -83,35 +83,52 @@ void targaLoad(const char* fileName, int* status)
      * Read TGA header
      */
     TGA_FILE_HEADER TGA_header;
-    if (fread(&TGA_header.idLength, sizeof(uint8_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.colorMapType, sizeof(uint8_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.imageType, sizeof(uint8_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.colorMapSpec.firstEntryIndex, sizeof(uint16_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.colorMapSpec.mapLenght, sizeof(uint16_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.colorMapSpec.mapEntrySize, sizeof(uint8_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.imageSpec.xOriginOfImage, sizeof(uint16_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.imageSpec.yOriginOfImage, sizeof(uint16_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.imageSpec.imageWidth, sizeof(uint16_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.imageSpec.imageHeight, sizeof(uint16_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.imageSpec.pixelDepth, sizeof(uint8_t), 1, TGA_file) < 1)
-        return;
-    if (fread(&TGA_header.imageSpec.imageDescriptor, sizeof(uint8_t), 1, TGA_file) < 1)
-        return;
+    if (fread(&TGA_header.idLength, sizeof(uint8_t), 1, TGA_file) < 1) return;
+    fread(&TGA_header.colorMapType, sizeof(uint8_t), 1, TGA_file);
+    fread(&TGA_header.imageType, sizeof(uint8_t), 1, TGA_file);
+    fread(&TGA_header.colorMapSpec.firstEntryIndex, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.colorMapSpec.mapLenght, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.colorMapSpec.mapEntrySize, sizeof(uint8_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.xOriginOfImage, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.yOriginOfImage, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.imageWidth, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.imageHeight, sizeof(uint16_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.pixelDepth, sizeof(uint8_t), 1, TGA_file);
+    fread(&TGA_header.imageSpec.imageDescriptor, sizeof(uint8_t), 1, TGA_file);
 
 
     /*
-     * Format supported?
+     * Skipp image id
      */
+    fseek(TGA_file, TGA_header.idLength, SEEK_CUR);
+
+
+    /*
+     * Read color map
+     */
+    char *TGA_colorMap = NULL;
+    if (TGA_header.colorMapType == CMT_COLOR_MAPPED)
+    {
+
+        TGA_colorMap = malloc(
+                  sizeof(char)
+                * TGA_header.colorMapSpec.mapLenght
+                * (TGA_header.colorMapSpec.mapEntrySize >> 3));
+
+        fread(TGA_colorMap, sizeof(char), 
+                  TGA_header.colorMapSpec.mapLenght 
+                * (TGA_header.colorMapSpec.mapEntrySize >> 3), TGA_file);
+    }
+
+    /*
+     * Read image data
+     */
+    char *texture = malloc(sizeof(char) *
+              TGA_header.imageSpec.imageWidth
+            * TGA_header.imageSpec.imageHeight
+            * 4);
+ 
+
     switch (TGA_header.imageType)
     {
         case IMG_TYPE_NO_IMAGE_DATA:
@@ -121,6 +138,13 @@ void targaLoad(const char* fileName, int* status)
             printf("unsuported format color mapped\n");
             return;
         case IMG_TYPE_UNCOMPRESSED_TRUE_COLOR:
+            switch (TGA_header.imageSpec.pixelDepth)
+            {
+                case 16: break;
+                case 24: 
+                         targaLoad24bits()
+                case 32: break;
+            }
             break;
         case IMG_TYPE_UNCOMPRESSED_BLACK_AND_WHITE:
             printf("unsuported format black and white\n");
@@ -136,12 +160,6 @@ void targaLoad(const char* fileName, int* status)
             return;
     }
 
-
-
-    /*
-     * Skipp image id
-     */
-    fseek(TGA_file, TGA_header.idLength, SEEK_CUR);
 
 
 
