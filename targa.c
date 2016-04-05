@@ -91,7 +91,11 @@ void targaLoad24bits(
     
 }
 
-void* targaLoad(const char* fileName, int* status)
+void* targaLoad(
+        const char* fileName,
+        int* status,
+        unsigned char* width,
+        unsigned char* height)
 {
 
     FILE* TGA_file = fopen(fileName, "rb");
@@ -120,6 +124,8 @@ void* targaLoad(const char* fileName, int* status)
     fread(&TGA_header.imageSpec.pixelDepth, sizeof(uint8_t), 1, TGA_file);
     fread(&TGA_header.imageSpec.imageDescriptor, sizeof(uint8_t), 1, TGA_file);
 
+    *width  = TGA_header.imageSpec.imageWidth;
+    *height = TGA_header.imageSpec.imageHeight;
 
     /*
      * Skipp image id

@@ -35,7 +35,11 @@
 extern "C" {
 #endif // __cplusplus
 
-void* targaLoad(const char* fileName, int* status);
+void* targaLoad(
+        const char* fileName,
+        int* status,
+        unsigned char* width,
+        unsigned char* height);
 
 #ifdef __cplusplus
 }
