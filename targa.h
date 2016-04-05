@@ -38,8 +38,8 @@ extern "C" {
 void* targaLoad(
         const char* fileName,
         int* status,
-        unsigned char* width,
-        unsigned char* height);
+        unsigned int* width,
+        unsigned int* height);
 
 #ifdef __cplusplus
 }

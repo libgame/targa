@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
 {
 
     int loadStatus;
-    unsigned char w, h;
+    unsigned int w, h;
     targaLoad(argv[1], &loadStatus, &w, &h);
 
     printf("status is: %d\n", loadStatus);

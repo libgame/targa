@@ -94,8 +94,8 @@ void targaLoad24bits(
 void* targaLoad(
         const char* fileName,
         int* status,
-        unsigned char* width,
-        unsigned char* height)
+        unsigned int* width,
+        unsigned int* height)
 {
 
     FILE* TGA_file = fopen(fileName, "rb");
